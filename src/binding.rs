@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct DtVector {
     pub y: f32,
     pub z: f32,

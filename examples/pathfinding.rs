@@ -280,10 +280,11 @@ impl<'a> Navigator<'a> {
                 let delta = steer_pos - iter_pos;
                 let mut len = delta.dot(&delta).sqrt();
 
-                if steer_flags
-                    .contains(DtStraightPathFlags::END | DtStraightPathFlags::OFFMESH_CONNECTION)
-                    && len < self.settings.smooth_step_size
-                {
+                let end_of_path = steer_flags.contains(DtStraightPathFlags::END);
+                let off_mesh_connection =
+                    steer_flags.contains(DtStraightPathFlags::OFFMESH_CONNECTION);
+
+                if (end_of_path || off_mesh_connection) && len < self.settings.smooth_step_size {
                     len = 1.0;
                 } else {
                     len = self.settings.smooth_step_size / len;

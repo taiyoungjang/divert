@@ -115,6 +115,8 @@ pub struct NavMesh<'a> {
     _phantom: marker::PhantomData<&'a DtNavMesh>,
 }
 
+unsafe impl Send for NavMesh<'_> {}
+
 /// Provides functionality to interact with NavMesh and its underlying dtNavMesh
 impl<'a> NavMesh<'a> {
     /// Allocates and initializes a dtNavMesh for NavMesh to handle
@@ -182,6 +184,8 @@ pub struct QueryFilter<'a> {
     _phantom: marker::PhantomData<&'a DtQueryFilter>,
 }
 
+unsafe impl Send for QueryFilter<'_> {}
+
 /// Provides functionality to interact with QueryFilter and its underlying dtQueryFilter
 impl<'a> QueryFilter<'a> {
     /// Allocates a dtQueryFilter
@@ -206,7 +210,7 @@ impl<'a> QueryFilter<'a> {
     }
 
     /// Retrieves the filter's include flags
-    pub fn get_include_flags(&mut self) -> u16 {
+    pub fn get_include_flags(&self) -> u16 {
         unsafe { dtQueryFilter_getIncludeFlags(self.handle) }
     }
 
@@ -218,7 +222,7 @@ impl<'a> QueryFilter<'a> {
     }
 
     /// Retrieves the filter's exclude flags
-    pub fn get_exclude_flags(&mut self) -> u16 {
+    pub fn get_exclude_flags(&self) -> u16 {
         unsafe { dtQueryFilter_getExcludeFlags(self.handle) }
     }
 }
@@ -236,6 +240,8 @@ pub struct NavMeshQuery<'a> {
     handle: *mut DtNavMeshQuery,
     _phantom: marker::PhantomData<&'a DtNavMeshQuery>,
 }
+
+unsafe impl Send for NavMeshQuery<'_> {}
 
 /// Provides functionality to interact with NavMeshQuery and its underlying dtNavMeshQuery
 impl<'a> NavMeshQuery<'a> {
@@ -262,7 +268,7 @@ impl<'a> NavMeshQuery<'a> {
 
     /// Queries for polygon height given the reference polygon and position on the polygon
     /// Errors if ffi function returns a failed DtStatus
-    pub fn get_poly_height(&mut self, poly_ref: PolyRef, position: &DtVector) -> DivertResult<f32> {
+    pub fn get_poly_height(&self, poly_ref: PolyRef, position: &DtVector) -> DivertResult<f32> {
         let mut height: f32 = 0.0;
 
         let get_poly_height_status =
@@ -278,7 +284,7 @@ impl<'a> NavMeshQuery<'a> {
     /// Queries for nearest polygon given a center point, a search area (extents), and a filter
     /// Errors if ffi function returns a failed DtStatus
     pub fn find_nearest_poly(
-        &mut self,
+        &self,
         center: &Vector,
         extents: &Vector,
         filter: &QueryFilter,
@@ -307,7 +313,7 @@ impl<'a> NavMeshQuery<'a> {
     /// Queries for closest point on poly to a given position
     /// Errors if ffi function returns a failed DtStatus
     pub fn closest_point_on_poly(
-        &mut self,
+        &self,
         poly_ref: PolyRef,
         position: &Vector,
     ) -> DivertResult<(Vector, bool)> {
@@ -334,7 +340,7 @@ impl<'a> NavMeshQuery<'a> {
     /// Queries for closest point on poly boundary to a given position
     /// Errors if ffi function returns a failed DtStatus
     pub fn closest_point_on_poly_boundary(
-        &mut self,
+        &self,
         poly_ref: PolyRef,
         position: &Vector,
     ) -> DivertResult<Vector> {
@@ -359,7 +365,7 @@ impl<'a> NavMeshQuery<'a> {
     /// Generates a polygon path from one (poly, position) to another (poly, position)
     /// Errors if ffi function returns a failed DtStatus
     pub fn find_path(
-        &mut self,
+        &self,
         start_ref: PolyRef,
         end_ref: PolyRef,
         start_pos: &Vector,
@@ -400,7 +406,7 @@ impl<'a> NavMeshQuery<'a> {
     /// Generates a (poly, position) path from on (poly, position) to another (poly, position)
     /// Errors if ffi function returns a failed DtStatus
     pub fn find_straight_path(
-        &mut self,
+        &self,
         start_pos: &Vector,
         end_pos: &Vector,
         poly_path: &[PolyRef],
@@ -458,7 +464,7 @@ impl<'a> NavMeshQuery<'a> {
     /// Generates a poly path while moving from (poly, position) to a (poly)
     /// Errors if ffi function returns a failed DtStatus
     pub fn move_along_surface(
-        &mut self,
+        &self,
         start_ref: PolyRef,
         start_pos: &Vector,
         end_pos: &Vector,
