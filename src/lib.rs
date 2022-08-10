@@ -390,7 +390,7 @@ impl<'a> NavMeshQuery<'a> {
             )
         };
 
-        println!("FindPathStatus: {:#?}", find_path_status);
+        log::trace!("FindPathStatus: {:#?}", find_path_status);
 
         if find_path_status.is_failed() {
             return Err(DivertError::FindPathFailure(find_path_status));
@@ -437,7 +437,7 @@ impl<'a> NavMeshQuery<'a> {
             )
         };
 
-        println!("FindStraightPathStatus: {:#?}", find_path_status);
+        log::trace!("FindStraightPathStatus: {:#?}", find_path_status);
 
         if find_path_status.is_failed() {
             return Err(DivertError::FindStraightPathFailure(find_path_status));
