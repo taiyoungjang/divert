@@ -1,6 +1,6 @@
 [package]
 name = "divert"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "Rust Lang bindings for Recast Navigation"
 homepage = "https://github.com/0xFounders/divert"
