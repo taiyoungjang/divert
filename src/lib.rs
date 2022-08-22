@@ -5,6 +5,7 @@ use std::{
     ops::{Add, Mul, Sub},
 };
 
+pub use binding::DtStatus;
 pub use binding::DtStraightPathFlags;
 
 use binding::*;
@@ -363,6 +364,48 @@ impl<'a> NavMeshQuery<'a> {
     }
 
     /// Generates a polygon path from one (poly, position) to another (poly, position)
+    /// Uses a user provided PolyRef Vector
+    /// Max Path length is derived from the user provided PolyRef Vec's capacity
+    /// Errors if ffi function returns a failed DtStatus
+    pub fn find_path_inplace(
+        &self,
+        start_ref: PolyRef,
+        end_ref: PolyRef,
+        start_pos: &Vector,
+        end_pos: &Vector,
+        filter: &QueryFilter,
+        path: &mut Vec<PolyRef>,
+    ) -> DivertResult<DtStatus> {
+        let mut path_count = 0;
+
+        let find_path_status = unsafe {
+            dtNavMeshQuery_findPath(
+                self.handle,
+                start_ref,
+                end_ref,
+                start_pos,
+                end_pos,
+                filter.handle,
+                path.as_mut_ptr(),
+                &mut path_count,
+                path.capacity().try_into().unwrap(),
+            )
+        };
+
+        log::trace!("FindPathStatus: {:#?}", find_path_status);
+
+        unsafe {
+            path.set_len(path_count as usize);
+        }
+
+        if find_path_status.is_failed() {
+            return Err(DivertError::FindPathFailure(find_path_status));
+        }
+
+        Ok(find_path_status)
+    }
+
+    /// Generates a polygon path from one (poly, position) to another (poly, position)
     /// Errors if ffi function returns a failed DtStatus
     pub fn find_path(
         &self,
@@ -392,15 +435,63 @@ impl<'a> NavMeshQuery<'a> {
 
         log::trace!("FindPathStatus: {:#?}", find_path_status);
 
-        if find_path_status.is_failed() {
-            return Err(DivertError::FindPathFailure(find_path_status));
-        }
-
         unsafe {
             path.set_len(path_count as usize);
         }
 
+        if find_path_status.is_failed() {
+            return Err(DivertError::FindPathFailure(find_path_status));
+        }
+
         Ok(path)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    /// Generates a (poly, position) path from on (poly, position) to another (poly, position)
+    /// Uses a user provided DtVector Vec, DtStraightPathFlags Vec, and PolyRef Vec
+    /// Max Path length is derived from the user provided DtVector Vec's capacity
+    /// Errors if ffi function returns a failed DtStatus
+    pub fn find_straight_path_inplace(
+        &self,
+        start_pos: &Vector,
+        end_pos: &Vector,
+        poly_path: &[PolyRef],
+        straight_path_points: &mut Vec<DtVector>,
+        straight_path_flags: &mut Vec<DtStraightPathFlags>,
+        straight_path_polys: &mut Vec<PolyRef>,
+        options: i32,
+    ) -> DivertResult<DtStatus> {
+        let mut straight_path_count = 0;
+
+        let find_path_status = unsafe {
+            dtNavMeshQuery_findStraightPath(
+                self.handle,
+                start_pos,
+                end_pos,
+                poly_path.as_ptr(),
+                poly_path.len().try_into().unwrap(),
+                straight_path_points.as_mut_ptr(),
+                straight_path_flags.as_mut_ptr(),
+                straight_path_polys.as_mut_ptr(),
+                &mut straight_path_count,
+                straight_path_points.capacity().try_into().unwrap(),
+                options,
+            )
+        };
+
+        let path_count = straight_path_count as usize;
+        unsafe {
+            straight_path_points.set_len(path_count);
+            straight_path_flags.set_len(path_count);
+            straight_path_polys.set_len(path_count);
+        }
+
+        log::trace!("FindStraightPathStatus: {:#?}", find_path_status);
+        if find_path_status.is_failed() {
+            return Err(DivertError::FindStraightPathFailure(find_path_status));
+        }
+
+        Ok(find_path_status)
     }
 
     /// Generates a (poly, position) path from on (poly, position) to another (poly, position)
@@ -439,16 +530,16 @@ impl<'a> NavMeshQuery<'a> {
 
         log::trace!("FindStraightPathStatus: {:#?}", find_path_status);
 
-        if find_path_status.is_failed() {
-            return Err(DivertError::FindStraightPathFailure(find_path_status));
-        }
-
         let path_count = straight_path_count as usize;
 
         unsafe {
             straight_path_points.set_len(path_count);
             straight_path_flags.set_len(path_count);
             straight_path_polys.set_len(path_count);
+        }
+
+        if find_path_status.is_failed() {
+            return Err(DivertError::FindStraightPathFailure(find_path_status));
         }
 
         let path_result = straight_path_points
@@ -459,6 +550,48 @@ impl<'a> NavMeshQuery<'a> {
             .collect();
 
         Ok(path_result)
+    }
+
+    /// Generates a poly path while moving from (poly, position) to a (poly)
+    /// Uses a user provided PolyRef Vec
+    /// Max Path length is derived from the user provided PolyRef Vec's capacity
+    /// Errors if ffi function returns a failed DtStatus
+    pub fn move_along_surface_inplace(
+        &self,
+        start_ref: PolyRef,
+        start_pos: &Vector,
+        end_pos: &Vector,
+        filter: &QueryFilter,
+        result_pos: &mut Vector,
+        visited: &mut Vec<PolyRef>,
+    ) -> DivertResult<DtStatus> {
+        let mut visited_count = 0;
+
+        let move_along_surface_result = unsafe {
+            dtNavMeshQuery_moveAlongSurface(
+                self.handle,
+                start_ref,
+                start_pos,
+                end_pos,
+                filter.handle,
+                result_pos,
+                visited.as_mut_ptr(),
+                &mut visited_count,
+                visited.capacity().try_into().unwrap(),
+            )
+        };
+
+        unsafe {
+            visited.set_len(visited_count as usize);
+        }
+
+        if move_along_surface_result.is_failed() {
+            return Err(DivertError::MoveAlongSurfaceFailure(
+                move_along_surface_result,
+            ));
+        }
+
+        Ok(move_along_surface_result)
     }
 
     /// Generates a poly path while moving from (poly, position) to a (poly)
@@ -489,14 +622,14 @@ impl<'a> NavMeshQuery<'a> {
             )
         };
 
+        unsafe {
+            visited.set_len(visited_count as usize);
+        }
+
         if move_along_surface_result.is_failed() {
             return Err(DivertError::MoveAlongSurfaceFailure(
                 move_along_surface_result,
             ));
-        }
-
-        unsafe {
-            visited.set_len(visited_count as usize);
         }
 
         Ok((result_pos, visited))

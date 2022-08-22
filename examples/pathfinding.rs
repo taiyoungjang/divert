@@ -11,37 +11,8 @@ use std::{
     collections::HashMap,
     error::Error,
     fs::File,
-    io::{self, Read},
+    io::{self, Read, Seek, SeekFrom},
 };
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct MmapTileHeader {
-    magic: u32,
-    dt_version: u32,
-    mmap_version: u32,
-    size: u32,
-    use_liquids: u32,
-}
-
-impl MmapTileHeader {
-    fn from_reader(mut rdr: impl Read) -> io::Result<Self> {
-        let magic = rdr.read_u32::<LittleEndian>()?;
-        let dt_version = rdr.read_u32::<LittleEndian>()?;
-        let mmap_version = rdr.read_u32::<LittleEndian>()?;
-
-        let size = rdr.read_u32::<LittleEndian>()?;
-        let use_liquids = rdr.read_u32::<LittleEndian>()?;
-
-        Ok(MmapTileHeader {
-            magic,
-            dt_version,
-            mmap_version,
-            size,
-            use_liquids,
-        })
-    }
-}
 
 fn in_range(source: &Vector, destination: &Vector, radius: f32, height: f32) -> bool {
     let dx = destination.y - source.y;
@@ -122,13 +93,15 @@ trait TileProvider {
     fn read_tile_data(&self, tile_x: u32, tile_y: u32) -> io::Result<Vec<u8>>;
 }
 
-struct TrinityTileProvider {}
+struct TrinityTileProvider {
+    map_id: u32,
+}
 
 impl TileProvider for TrinityTileProvider {
     fn read_tile_data(&self, tile_x: u32, tile_y: u32) -> io::Result<Vec<u8>> {
         let mut tile_file = File::open(
             &[
-                "resources/geometry/530",
+                &format!("resources/geometry/{:03}", self.map_id),
                 &tile_x.to_string(),
                 &tile_y.to_string(),
                 ".mmtile",
@@ -136,13 +109,7 @@ impl TileProvider for TrinityTileProvider {
             .join(""),
         )?;
 
-        /*
-        TrinityCore Tiles have some header information unrelated to RecastNavigation
-        Here we parse it out, and just denote the header is an unused variable. Would also be valid to simply skip the 20 bytes
         tile_file.seek(SeekFrom::Current(20))?;
-        */
-        let _trinity_header = MmapTileHeader::from_reader(&tile_file)?;
-
         let mut tile_data = Vec::new();
         tile_file.read_to_end(&mut tile_data)?;
         Ok(tile_data)
@@ -150,12 +117,13 @@ impl TileProvider for TrinityTileProvider {
 }
 
 struct NavigatorSettings {
-    pub max_path: i32,
-    pub max_smooth_path: i32,
+    pub max_path: usize,
+    pub max_smooth_path: usize,
+    pub max_move_visits: usize,
     pub max_steer_points: i32,
+
     pub steer_target_radius: f32,
     pub steer_target_height: f32,
-    pub max_move_visits: i32,
     pub smooth_step_size: f32,
 }
 
@@ -163,7 +131,7 @@ impl Default for NavigatorSettings {
     fn default() -> Self {
         Self {
             max_path: 64,
-            max_smooth_path: 256,
+            max_smooth_path: 128,
             max_steer_points: 3,
             steer_target_radius: 0.3,
             steer_target_height: 1000.0,
@@ -180,22 +148,39 @@ struct Navigator<'a> {
     query_filter: QueryFilter<'a>,
     tile_map: HashMap<u32, bool>,
     settings: NavigatorSettings,
+
+    poly_path: Vec<PolyRef>,
+    smooth_path: Vec<Vector>,
+    move_along_path: Vec<PolyRef>,
 }
 
 impl<'a> Navigator<'a> {
-    fn new(
-        nav_mesh: NavMesh<'a>,
-        nav_mesh_query: NavMeshQuery<'a>,
-        query_filter: QueryFilter<'a>,
-    ) -> Self {
-        Self {
-            tile_provider: Box::new(TrinityTileProvider {}),
+    fn new(map_id: u32, settings: NavigatorSettings) -> Result<Self, Box<dyn Error>> {
+        let map_params_file = File::open(format!("resources/geometry/{:03}.mmap", map_id))?;
+        let params = read_nav_mesh_params_from(map_params_file)?;
+
+        let nav_mesh = NavMesh::new(&params)?;
+        let nav_mesh_query = NavMeshQuery::new(&nav_mesh, 2048)?;
+
+        let mut query_filter = QueryFilter::new()?;
+        query_filter.set_include_flags(1 | 8 | 4 | 2);
+        query_filter.set_exclude_flags(0);
+
+        let max_path = settings.max_path;
+        let max_smooth_path = settings.max_smooth_path;
+        let max_move_along_path = settings.max_move_visits;
+
+        Ok(Self {
+            tile_provider: Box::new(TrinityTileProvider { map_id }),
             nav_mesh,
             nav_mesh_query,
             query_filter,
             tile_map: HashMap::with_capacity(8),
-            settings: NavigatorSettings::default(),
-        }
+            settings,
+            poly_path: Vec::with_capacity(max_path),
+            smooth_path: Vec::with_capacity(max_smooth_path),
+            move_along_path: Vec::with_capacity(max_move_along_path),
+        })
     }
 
     fn find_nearest_poly(&mut self, position: &Vector) -> DivertResult<(PolyRef, Vector)> {
@@ -229,12 +214,11 @@ impl<'a> Navigator<'a> {
         &mut self,
         start_pos: &Vector,
         end_pos: &Vector,
-        poly_path: &[PolyRef],
     ) -> DivertResult<Option<(Vector, DtStraightPathFlags, PolyRef)>> {
         let steer_points = self.nav_mesh_query.find_straight_path(
             start_pos,
             end_pos,
-            poly_path,
+            &self.poly_path,
             self.settings.max_steer_points,
             0,
         )?;
@@ -256,26 +240,21 @@ impl<'a> Navigator<'a> {
         Ok(None)
     }
 
-    fn find_smooth_path(
-        &mut self,
-        start_pos: &Vector,
-        end_pos: &Vector,
-        mut polygons: Vec<PolyRef>,
-    ) -> DivertResult<Vec<Vector>> {
-        let mut smooth_path = Vec::with_capacity(self.settings.max_smooth_path.try_into().unwrap());
+    fn find_smooth_path(&mut self, start_pos: &Vector, end_pos: &Vector) -> DivertResult<()> {
+        self.smooth_path.clear();
 
         let mut iter_pos = self
             .nav_mesh_query
-            .closest_point_on_poly_boundary(*polygons.first().unwrap(), start_pos)?;
+            .closest_point_on_poly_boundary(*self.poly_path.first().unwrap(), start_pos)?;
 
         let target_pos = self
             .nav_mesh_query
-            .closest_point_on_poly_boundary(*polygons.last().unwrap(), end_pos)?;
+            .closest_point_on_poly_boundary(*self.poly_path.last().unwrap(), end_pos)?;
 
-        smooth_path.push(iter_pos);
-        while !polygons.is_empty() && (smooth_path.len() < smooth_path.capacity()) {
+        self.smooth_path.push(iter_pos);
+        while !self.poly_path.is_empty() && (self.smooth_path.len() < self.smooth_path.capacity()) {
             if let Some((steer_pos, steer_flags, _)) =
-                self.get_steer_target(&iter_pos, &target_pos, &polygons)?
+                self.get_steer_target(&iter_pos, &target_pos)?
             {
                 let delta = steer_pos - iter_pos;
                 let mut len = delta.dot(&delta).sqrt();
@@ -291,37 +270,35 @@ impl<'a> Navigator<'a> {
                 }
 
                 let move_target = iter_pos + (delta * len);
-                let (move_result, visited) = self.nav_mesh_query.move_along_surface(
-                    polygons[0],
+
+                let mut move_result = Vector::default();
+                self.nav_mesh_query.move_along_surface_inplace(
+                    self.poly_path[0],
                     &iter_pos,
                     &move_target,
                     &self.query_filter,
-                    self.settings.max_move_visits,
+                    &mut move_result,
+                    &mut self.move_along_path,
                 )?;
 
-                fix_up_corridor(&mut polygons, &visited);
+                fix_up_corridor(&mut self.poly_path, &self.move_along_path);
 
                 let height = self
                     .nav_mesh_query
-                    .get_poly_height(polygons[0], &move_result)
+                    .get_poly_height(self.poly_path[0], &move_result)
                     .unwrap_or(0.0);
 
                 iter_pos = Vector::from_yzx(move_result.y, height + 0.5, move_result.x);
-
-                smooth_path.push(iter_pos);
+                self.smooth_path.push(iter_pos);
             } else {
                 break;
             }
         }
 
-        Ok(smooth_path)
+        Ok(())
     }
 
-    pub fn find_path(
-        &mut self,
-        input_start: &Vector,
-        input_end: &Vector,
-    ) -> DivertResult<Vec<Vector>> {
+    pub fn find_path(&mut self, input_start: &Vector, input_end: &Vector) -> DivertResult<()> {
         let start_tile = world_to_trinity(input_start.x, input_start.y);
         let end_tile = world_to_trinity(input_end.x, input_end.y);
 
@@ -340,18 +317,41 @@ impl<'a> Navigator<'a> {
         let (start_poly, start_pos) = self.find_nearest_poly(input_start)?;
         let (end_poly, end_pos) = self.find_nearest_poly(input_end)?;
 
-        let poly_path = self.nav_mesh_query.find_path(
+        let _poly_path_status = self.nav_mesh_query.find_path_inplace(
             start_poly,
             end_poly,
             &start_pos,
             &end_pos,
             &self.query_filter,
-            self.settings.max_path,
+            &mut self.poly_path,
         )?;
 
-        let smooth_path = self.find_smooth_path(&start_pos, &end_pos, poly_path)?;
-        Ok(smooth_path)
+        self.find_smooth_path(&start_pos, &end_pos)?;
+        Ok(())
     }
+}
+
+fn test_path(
+    start_position: &Vector,
+    end_position: &Vector,
+    navigator: &mut Navigator,
+) -> Result<(), Box<dyn Error>> {
+    info!(
+        "Finding Path From {:?} to {:?}",
+        start_position, end_position
+    );
+
+    navigator.find_path(start_position, end_position)?;
+
+    navigator
+        .smooth_path
+        .iter()
+        .for_each(|position| info!("{:?}", position));
+
+    info!("Found Path from {:?} to {:?}", start_position, end_position);
+    info!("Path Length: {}", navigator.smooth_path.len());
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -359,39 +359,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         .filter_level(LevelFilter::Info)
         .init();
 
-    let map_params_file = File::open("resources/geometry/530.mmap")?;
-    let params = read_nav_mesh_params_from(map_params_file)?;
-
-    let nav_mesh = NavMesh::new(&params)?;
-    let nav_mesh_query = NavMeshQuery::new(&nav_mesh, 2048)?;
-
-    let mut query_filter = QueryFilter::new()?;
-    query_filter.set_include_flags(1 | 8 | 4 | 2);
-    query_filter.set_exclude_flags(0);
-
-    let mut navigator = Navigator::new(nav_mesh, nav_mesh_query, query_filter);
+    let mut navigator = Navigator::new(530, NavigatorSettings::default())?;
 
     // // Shat Bridge (35,22) -> (35, 22)
-    // let start_position = Vector::from_xyz(-1910.12, 5289.2, 1.424);
-    // let end_position = Vector::from_xyz(-1931.90, 5099.05, 8.05);
-    // navigator.find_path(&start_position, &end_position)?;
+    let start_position = Vector::from_xyz(-1910.12, 5289.2, 1.424);
+    let end_position = Vector::from_xyz(-1931.90, 5099.05, 8.05);
+    test_path(&start_position, &end_position, &mut navigator)?;
     // // Shat Bridge
 
     // CROSS_TILE
     // Terrokar (35,22) -> (35, 23)
-    // let start_position = Vector::from_xyz(-1916.64, 4893.65, 2.26);
-    // let end_position = Vector::from_xyz(-1947.43, 4687.55, -2.09);
-    // navigator.find_path(&start_position, &end_position)?;
+    let start_position = Vector::from_xyz(-1916.64, 4893.65, 2.26);
+    let end_position = Vector::from_xyz(-1947.43, 4687.55, -2.09);
+    test_path(&start_position, &end_position, &mut navigator)?;
     // Terrokar
 
     // LONG Path
     // Terrokar (35,22) -> (35, 23)
     let start_position = Vector::from_xyz(-2051.9, 4350.97, 2.25);
     let end_position = Vector::from_xyz(-1916.12, 4894.67, 2.21);
-    navigator
-        .find_path(&start_position, &end_position)?
-        .iter()
-        .for_each(|position| info!("{:?}", position));
+    test_path(&start_position, &end_position, &mut navigator)?;
     // Terrokar
 
     Ok(())
