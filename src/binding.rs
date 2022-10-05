@@ -1,12 +1,14 @@
 use bitflags::bitflags;
+pub use glam::*;
+// #[repr(C)]
+// #[derive(Debug, Clone, Copy, Default, PartialEq)]
+// pub struct DtVector {
+//     pub y: f64,
+//     pub z: f64,
+//     pub x: f64,
+// }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct DtVector {
-    pub y: f32,
-    pub z: f32,
-    pub x: f32,
-}
+pub type DtVector = glam::f64::DVec3;
 
 pub enum DtNavMesh {}
 
@@ -21,9 +23,9 @@ pub type DtPolyRef = u64;
 #[repr(C)]
 #[derive(Debug)]
 pub struct DtNavMeshParams {
-    pub origin: [f32; 3],
-    pub tile_width: f32,
-    pub tile_height: f32,
+    pub origin: [f64; 3],
+    pub tile_width: f64,
+    pub tile_height: f64,
     pub max_tiles: i32,
     pub max_polys: i32,
 }
@@ -46,11 +48,11 @@ pub struct DtMeshHeader {
     bv_node_count: i32,
     off_mesh_con_count: i32,
     off_mesh_base: i32,
-    walkable_height: f32,
-    walkable_climb: f32,
-    b_min: [f32; 3],
-    b_max: [f32; 3],
-    bv_quant_factor: f32,
+    walkable_height: f64,
+    walkable_climb: f64,
+    b_min: [f64; 3],
+    b_max: [f64; 3],
+    bv_quant_factor: f64
 }
 
 // High level status.
@@ -141,7 +143,7 @@ extern "C" {
         _self: *mut DtNavMeshQuery,
         poly_ref: DtPolyRef,
         position: *const DtVector,
-        height: *mut f32,
+        height: *mut f64,
     ) -> DtStatus;
     pub fn dtNavMeshQuery_findNearestPoly(
         _self: *mut DtNavMeshQuery,

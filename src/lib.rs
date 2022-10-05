@@ -2,7 +2,6 @@ mod binding;
 
 use std::{
     marker,
-    ops::{Add, Mul, Sub},
 };
 
 pub use binding::DtStatus;
@@ -18,58 +17,58 @@ pub type Vector = DtVector;
 
 /// Provides functionality to initialize Vectors compatible with Recast
 /// Additionally provides basic math functions used with 3D Vectors
-impl Vector {
-    /// Simple function to help with initializing maintaining expected ordering
-    pub fn from_xyz(x: f32, y: f32, z: f32) -> Self {
-        Self { x, y, z }
-    }
-
-    /// Simple function to help with initializing maintaining expected ordering
-    pub fn from_yzx(y: f32, z: f32, x: f32) -> Self {
-        Self { x, y, z }
-    }
-
-    /// Dot product of the vector and other
-    pub fn dot(&self, other: &Self) -> f32 {
-        self.x * other.x + self.y * other.y + self.z * other.z
-    }
-}
-
-impl Add for Vector {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        Self {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
-        }
-    }
-}
-
-impl Sub for Vector {
-    type Output = Self;
-
-    fn sub(self, other: Self) -> Self {
-        Self {
-            x: self.x - other.x,
-            y: self.y - other.y,
-            z: self.z - other.z,
-        }
-    }
-}
-
-impl Mul<f32> for Vector {
-    type Output = Self;
-
-    fn mul(self, scalar: f32) -> Self {
-        Self {
-            x: self.x * scalar,
-            y: self.y * scalar,
-            z: self.z * scalar,
-        }
-    }
-}
+// impl Vector {
+//     /// Simple function to help with initializing maintaining expected ordering
+//     pub fn from_xyz(x: f64, y: f64, z: f64) -> Self {
+//         Self { x, y, z }
+//     }
+//
+//     /// Simple function to help with initializing maintaining expected ordering
+//     pub fn from_yzx(y: f32, z: f32, x: f32) -> Self {
+//         Self { x, y, z }
+//     }
+//
+//     /// Dot product of the vector and other
+//     pub fn dot(&self, other: &Self) -> f32 {
+//         self.x * other.x + self.y * other.y + self.z * other.z
+//     }
+// }
+//
+// impl Add for Vector {
+//     type Output = Self;
+//
+//     fn add(self, other: Self) -> Self {
+//         Self {
+//             x: self.x + other.x,
+//             y: self.y + other.y,
+//             z: self.z + other.z,
+//         }
+//     }
+// }
+//
+// impl Sub for Vector {
+//     type Output = Self;
+//
+//     fn sub(self, other: Self) -> Self {
+//         Self {
+//             x: self.x - other.x,
+//             y: self.y - other.y,
+//             z: self.z - other.z,
+//         }
+//     }
+// }
+//
+// impl Mul<f32> for Vector {
+//     type Output = Self;
+//
+//     fn mul(self, scalar: f32) -> Self {
+//         Self {
+//             x: self.x * scalar,
+//             y: self.y * scalar,
+//             z: self.z * scalar,
+//         }
+//     }
+// }
 
 /// Typedef to DtNavMeshParams
 /// Affords the ability in future to add custom functionality
@@ -269,8 +268,8 @@ impl<'a> NavMeshQuery<'a> {
 
     /// Queries for polygon height given the reference polygon and position on the polygon
     /// Errors if ffi function returns a failed DtStatus
-    pub fn get_poly_height(&self, poly_ref: PolyRef, position: &DtVector) -> DivertResult<f32> {
-        let mut height: f32 = 0.0;
+    pub fn get_poly_height(&self, poly_ref: PolyRef, position: &DtVector) -> DivertResult<f64> {
+        let mut height: f64 = 0.0;
 
         let get_poly_height_status =
             unsafe { dtNavMeshQuery_getPolyHeight(self.handle, poly_ref, position, &mut height) };

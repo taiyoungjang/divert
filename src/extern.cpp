@@ -71,30 +71,30 @@ extern "C"
     return query->init(mesh, maxNodes);
   }
 
-  dtStatus dtNavMeshQuery_getPolyHeight(dtNavMeshQuery *query, dtPolyRef polyRef, const float *pos, float *height)
+  dtStatus dtNavMeshQuery_getPolyHeight(dtNavMeshQuery *query, dtPolyRef polyRef, const double *pos, double *height)
   {
     return query->getPolyHeight(polyRef, pos, height);
   }
 
-  dtStatus dtNavMeshQuery_findNearestPoly(dtNavMeshQuery *query, const float *center, const float *extents,
+  dtStatus dtNavMeshQuery_findNearestPoly(dtNavMeshQuery *query, const double *center, const double *extents,
                                           const dtQueryFilter *filter,
-                                          dtPolyRef *nearestRef, float *nearestPt)
+                                          dtPolyRef *nearestRef, double *nearestPt)
   {
     return query->findNearestPoly(center, extents, filter, nearestRef, nearestPt);
   }
 
-  dtStatus dtNavMeshQuery_closestPointOnPoly(dtNavMeshQuery *query, dtPolyRef ref, const float *pos, float *closest, bool *posOverPoly)
+  dtStatus dtNavMeshQuery_closestPointOnPoly(dtNavMeshQuery *query, dtPolyRef ref, const double *pos, double *closest, bool *posOverPoly)
   {
     return query->closestPointOnPoly(ref, pos, closest, posOverPoly);
   }
 
-  dtStatus dtNavMeshQuery_closestPointOnPolyBoundary(dtNavMeshQuery *query, dtPolyRef ref, const float *pos, float *closest)
+  dtStatus dtNavMeshQuery_closestPointOnPolyBoundary(dtNavMeshQuery *query, dtPolyRef ref, const double *pos, double *closest)
   {
     return query->closestPointOnPolyBoundary(ref, pos, closest);
   }
 
   dtStatus dtNavMeshQuery_findPath(dtNavMeshQuery *query, dtPolyRef startRef, dtPolyRef endRef,
-                                   const float *startPos, const float *endPos,
+                                   const double *startPos, const double *endPos,
                                    const dtQueryFilter *filter,
                                    dtPolyRef *path, int *pathCount, const int maxPath)
   {
@@ -102,16 +102,16 @@ extern "C"
   }
 
   dtStatus dtNavMeshQuery_moveAlongSurface(dtNavMeshQuery *query, dtPolyRef startRef,
-                                           const float *startPos, const float *endPos,
+                                           const double *startPos, const double *endPos,
                                            const dtQueryFilter *filter,
-                                           float *resultPos, dtPolyRef *visited, int *visitedCount, const int maxVisitedSize)
+                                           double *resultPos, dtPolyRef *visited, int *visitedCount, const int maxVisitedSize)
   {
     return query->moveAlongSurface(startRef, startPos, endPos, filter, resultPos, visited, visitedCount, maxVisitedSize);
   }
 
-  dtStatus dtNavMeshQuery_findStraightPath(dtNavMeshQuery *query, const float *startPos, const float *endPos,
+  dtStatus dtNavMeshQuery_findStraightPath(dtNavMeshQuery *query, const double *startPos, const double *endPos,
                                            const dtPolyRef *path, const int pathSize,
-                                           float *straightPath, unsigned char *straightPathFlags, dtPolyRef *straightPathRefs,
+                                           double *straightPath, unsigned char *straightPathFlags, dtPolyRef *straightPathRefs,
                                            int *straightPathCount, const int maxStraightPath, const int options)
   {
     return query->findStraightPath(startPos, endPos, path, pathSize, straightPath, straightPathFlags, straightPathRefs, straightPathCount, maxStraightPath, options);

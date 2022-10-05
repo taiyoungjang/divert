@@ -1,7 +1,7 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use log::{info, trace, LevelFilter};
 
-use divert::{
+use divert_f64::{
     DivertResult, DtStraightPathFlags, NavMesh, NavMeshParams, NavMeshQuery, PolyRef, QueryFilter,
     Vector,
 };
@@ -14,14 +14,14 @@ use std::{
     io::{self, Read, Seek, SeekFrom},
 };
 
-fn in_range(source: &Vector, destination: &Vector, radius: f32, height: f32) -> bool {
+fn in_range(source: &Vector, destination: &Vector, radius: f64, height: f64) -> bool {
     let dx = destination.y - source.y;
     let dy = destination.z - source.z;
     let dz = destination.x - source.x;
     (dx * dx + dz * dz) < radius * radius && dy.abs() < height
 }
 
-fn world_to_trinity(world_x: f32, world_y: f32) -> (u32, u32) {
+fn world_to_trinity(world_x: f64, world_y: f64) -> (u32, u32) {
     (
         (32.0 - (world_x / 533.3333)) as u32,
         (32.0 - (world_y / 533.3333)) as u32,
@@ -29,12 +29,12 @@ fn world_to_trinity(world_x: f32, world_y: f32) -> (u32, u32) {
 }
 
 fn read_nav_mesh_params_from(mut rdr: impl Read) -> io::Result<NavMeshParams> {
-    let origin_x = rdr.read_f32::<LittleEndian>()?;
-    let origin_y = rdr.read_f32::<LittleEndian>()?;
-    let origin_z = rdr.read_f32::<LittleEndian>()?;
+    let origin_x = rdr.read_f64::<LittleEndian>()?;
+    let origin_y = rdr.read_f64::<LittleEndian>()?;
+    let origin_z = rdr.read_f64::<LittleEndian>()?;
 
-    let tile_width = rdr.read_f32::<LittleEndian>()?;
-    let tile_height = rdr.read_f32::<LittleEndian>()?;
+    let tile_width = rdr.read_f64::<LittleEndian>()?;
+    let tile_height = rdr.read_f64::<LittleEndian>()?;
 
     let max_tiles = rdr.read_i32::<LittleEndian>()?;
     let max_polys = rdr.read_i32::<LittleEndian>()?;
@@ -122,9 +122,9 @@ struct NavigatorSettings {
     pub max_move_visits: usize,
     pub max_steer_points: i32,
 
-    pub steer_target_radius: f32,
-    pub steer_target_height: f32,
-    pub smooth_step_size: f32,
+    pub steer_target_radius: f64,
+    pub steer_target_height: f64,
+    pub smooth_step_size: f64,
 }
 
 impl Default for NavigatorSettings {
@@ -184,7 +184,8 @@ impl<'a> Navigator<'a> {
     }
 
     fn find_nearest_poly(&mut self, position: &Vector) -> DivertResult<(PolyRef, Vector)> {
-        let extents = Vector::from_yzx(3.0f32, 5.0f32, 3.0f32);
+        //let extents = Vector::from_yzx(3.0f32, 5.0f32, 3.0f32);
+        let extents = Vector::new(3.0f64, 3.0f64, 5.0f64);
         self.nav_mesh_query
             .find_nearest_poly(position, &extents, &self.query_filter)
     }
@@ -257,7 +258,7 @@ impl<'a> Navigator<'a> {
                 self.get_steer_target(&iter_pos, &target_pos)?
             {
                 let delta = steer_pos - iter_pos;
-                let mut len = delta.dot(&delta).sqrt();
+                let mut len = delta.dot(delta).sqrt();
 
                 let end_of_path = steer_flags.contains(DtStraightPathFlags::END);
                 let off_mesh_connection =
@@ -287,8 +288,8 @@ impl<'a> Navigator<'a> {
                     .nav_mesh_query
                     .get_poly_height(self.poly_path[0], &move_result)
                     .unwrap_or(0.0);
-
-                iter_pos = Vector::from_yzx(move_result.y, height + 0.5, move_result.x);
+                //iter_pos = Vector::from_yzx(move_result.y, height + 0.5, move_result.x);
+                iter_pos = Vector::new(move_result.x, move_result.y, height + 0.5);
                 self.smooth_path.push(iter_pos);
             } else {
                 break;
@@ -362,22 +363,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut navigator = Navigator::new(530, NavigatorSettings::default())?;
 
     // // Shat Bridge (35,22) -> (35, 22)
-    let start_position = Vector::from_xyz(-1910.12, 5289.2, 1.424);
-    let end_position = Vector::from_xyz(-1931.90, 5099.05, 8.05);
+    let start_position = Vector::new(-1910.12, 5289.2, 1.424);
+    let end_position = Vector::new(-1931.90, 5099.05, 8.05);
     test_path(&start_position, &end_position, &mut navigator)?;
     // // Shat Bridge
 
     // CROSS_TILE
     // Terrokar (35,22) -> (35, 23)
-    let start_position = Vector::from_xyz(-1916.64, 4893.65, 2.26);
-    let end_position = Vector::from_xyz(-1947.43, 4687.55, -2.09);
+    let start_position = Vector::new(-1916.64, 4893.65, 2.26);
+    let end_position = Vector::new(-1947.43, 4687.55, -2.09);
     test_path(&start_position, &end_position, &mut navigator)?;
     // Terrokar
 
     // LONG Path
     // Terrokar (35,22) -> (35, 23)
-    let start_position = Vector::from_xyz(-2051.9, 4350.97, 2.25);
-    let end_position = Vector::from_xyz(-1916.12, 4894.67, 2.21);
+    let start_position = Vector::new(-2051.9, 4350.97, 2.25);
+    let end_position = Vector::new(-1916.12, 4894.67, 2.21);
     test_path(&start_position, &end_position, &mut navigator)?;
     // Terrokar
 
